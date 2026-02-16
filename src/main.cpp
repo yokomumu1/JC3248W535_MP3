@@ -5,14 +5,12 @@
 */
 
 #include <lvgl.h>
-#include <examples/lv_examples.h>
-#include <demos/lv_demos.h>
+#include "lv_port_disp.h"
 
 #include <Arduino.h>
 #include "pincfg.h"
 #include "dispcfg.h"
 #include "AXS15231B_touch.h"
-#include <Arduino_GFX_Library.h>
 #include "SD_MMC.h"
 #include "FS.h"
 #include <vector>
@@ -21,10 +19,6 @@
 
 #define MP3_FOLDER "/music"
 
-
-Arduino_DataBus *bus = new Arduino_ESP32QSPI(TFT_CS, TFT_SCK, TFT_SDA0, TFT_SDA1, TFT_SDA2, TFT_SDA3);
-Arduino_GFX *g = new Arduino_AXS15231B(bus, GFX_NOT_DEFINED, 0, false, TFT_res_W, TFT_res_H);
-Arduino_Canvas *gfx = new Arduino_Canvas(TFT_res_W, TFT_res_H, g, 0, 0, TFT_rot);
 AXS15231B_Touch touch(Touch_SCL, Touch_SDA, Touch_INT, Touch_ADDR, TFT_rot);
 
 std::vector<char *> v_fileContent;
@@ -49,17 +43,6 @@ void my_print(lv_log_level_t level, const char *buf) {
 // Callback so LVGL know the elapsed time
 uint32_t millis_cb(void) {
     return millis();
-}
-
-// LVGL calls it when a rendered image needs to copied to the display
-void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
-    uint32_t w = lv_area_get_width(area);
-    uint32_t h = lv_area_get_height(area);
-
-    gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)px_map, w, h);
-
-    // Call it to tell LVGL everthing is ready
-    lv_disp_flush_ready(disp);
 }
 
 // Read the touchpad
@@ -88,13 +71,6 @@ void setup() {
     String LVGL_Arduino = String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch() + " example";
     Serial.println(LVGL_Arduino);
 
-    // Display setup
-    if(!gfx->begin(40 * 1000 * 1000)) {   // 40MHz is the maximum for the display
-        Serial.println("Failed to initialize display!");
-        return;
-    }
-    gfx->fillScreen(BLACK);
-
     // Switch backlight on
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
@@ -109,6 +85,7 @@ void setup() {
 
     // Init LVGL
     lv_init();
+    lv_port_disp_init();
 
     // Set a tick source so that LVGL will know how much time elapsed
     lv_tick_set_cb(millis_cb);
@@ -118,6 +95,7 @@ void setup() {
     lv_log_register_print_cb(my_print);
     #endif
 
+#if 0
     // Initialize the display buffer
     uint32_t screenWidth = gfx->width();
     uint32_t screenHeight = gfx->height();
@@ -133,6 +111,7 @@ void setup() {
     lv_display_t *disp = lv_display_create(screenWidth, screenHeight);
     lv_display_set_flush_cb(disp, my_disp_flush);
     lv_display_set_buffers(disp, disp_draw_buf, NULL, bufSize * 2, LV_DISPLAY_RENDER_MODE_PARTIAL);
+#endif
 
     // Initialize the input device driver
     lv_indev_t *indev = lv_indev_create();
@@ -195,7 +174,7 @@ void setup() {
     }
 
     audio.setPinout(AUDIO_I2S_BCK_IO, AUDIO_I2S_LRCK_IO, AUDIO_I2S_DO_IO);
-    audio.setVolume(17); // 0...21 Will need to add a volume setting in the app
+    audio.setVolume(10); // 0...21 Will need to add a volume setting in the app
     dir = SD_MMC.open(audioDir);
     listDir(SD_MMC, audioDir, 1);
     if (v_fileContent.size() > 0)
@@ -208,16 +187,7 @@ void setup() {
 }
 
 void loop() {
-    static uint32_t last_time = 0;
-    uint32_t now = esp_timer_get_time();
-
     lv_task_handler();
-
-    if (now - last_time > 100000) { // Update every 100ms
-        gfx->flush();
-        last_time = now;
-    }
-
     audio.loop();
 }
 
