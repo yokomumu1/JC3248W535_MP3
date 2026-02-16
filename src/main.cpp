@@ -95,24 +95,6 @@ void setup() {
     lv_log_register_print_cb(my_print);
     #endif
 
-#if 0
-    // Initialize the display buffer
-    uint32_t screenWidth = gfx->width();
-    uint32_t screenHeight = gfx->height();
-    uint32_t bufSize = screenWidth * screenHeight / 10;
-    lv_color_t *disp_draw_buf = (lv_color_t *)heap_caps_malloc(bufSize * 2, /*MALLOC_CAP_INTERNAL*/MALLOC_CAP_DEFAULT | MALLOC_CAP_8BIT);
-    if (!disp_draw_buf) {
-        Serial.println("LVGL failed to allocate display buffer!");
-        return;
-    }
-
-    // Initialize the display driver
-    
-    lv_display_t *disp = lv_display_create(screenWidth, screenHeight);
-    lv_display_set_flush_cb(disp, my_disp_flush);
-    lv_display_set_buffers(disp, disp_draw_buf, NULL, bufSize * 2, LV_DISPLAY_RENDER_MODE_PARTIAL);
-#endif
-
     // Initialize the input device driver
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
@@ -123,16 +105,6 @@ void setup() {
     lv_label_set_text(label, "Digital Audio Player");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
 
-    /* Option 2: LVGL Demo. 
-       Don't forget to enable the demos in lv_conf.h. E.g. LV_USE_DEMOS_WIDGETS
-    */
-    // lv_demos_create(nullptr, 0);
-    //lv_demo_widgets();
-    // lv_demo_benchmark();
-    // lv_demo_keypad_encoder();
-    // lv_demo_music();
-    // lv_demo_stress();
-
     lb_info = lv_label_create(lv_scr_act());
     lv_label_set_text(lb_info, "---");
     lv_obj_align(lb_info, LV_ALIGN_TOP_MID, 0, 40);
@@ -142,8 +114,6 @@ void setup() {
 
     // ryk test ===>
     #if 1
-    //lv_obj_t * label;
-
     lv_obj_t * btn1 = lv_btn_create(lv_scr_act());
     // lv_obj_add_event_cb(btn1, event_handler, LV_EVENT_ALL, NULL);
     lv_obj_align(btn1, LV_ALIGN_CENTER, 0, -40);
