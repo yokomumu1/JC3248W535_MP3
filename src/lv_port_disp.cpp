@@ -30,7 +30,8 @@
 #endif
 
 typedef enum {
-    LVGL_FLUSH_READY_BIT = (1 << 0),
+    LVGL_FLUSH_READY_BIT = (1 << 0),    // Flush is ready to be called again
+    LVGL_TE_BIT = (1 << 1),             // TE (Tear Effect) signal received
 } lvgl_disp_evt_bits_t;
 
 #define BYTE_PER_PIXEL (LV_COLOR_FORMAT_GET_SIZE(LV_COLOR_FORMAT_RGB565)) /*will be 2 for RGB565 */
@@ -47,6 +48,7 @@ static void disp_init(void);
 static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
 
 static void lvgl_task(void *arg);
+static void tear_interrupt(void *arg);
 
 /**********************
  *  STATIC VARIABLES
@@ -121,11 +123,37 @@ void lv_port_disp_init(void)
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
+
+    // TE(Tear Effect≒VSYNC) GPIO setup
+    const gpio_config_t te_detect_cfg = {
+        .pin_bit_mask = BIT64(TFT_TE),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_NEGEDGE,
+    };
+
+    ESP_ERROR_CHECK(gpio_config(&te_detect_cfg));
+    gpio_install_isr_service(0);
+    ESP_ERROR_CHECK(gpio_isr_handler_add((gpio_num_t)TFT_TE, tear_interrupt, NULL));
 }
 
 /**********************
  *   STATIC FUNCTIONS
  **********************/
+
+static void tear_interrupt(void *arg)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    if (lvgl_disp_evt_group != NULL) {
+        xEventGroupSetBitsFromISR(lvgl_disp_evt_group, LVGL_TE_BIT, &xHigherPriorityTaskWoken);
+
+        if (xHigherPriorityTaskWoken) {
+            portYIELD_FROM_ISR();
+        }
+    }
+}
 
 /*Initialize your display and the required peripherals.*/
 static void disp_init(void)
@@ -135,7 +163,11 @@ static void disp_init(void)
         esp_rom_printf("Failed to initialize display!\n");
         return;
     }
-    gfx->fillScreen(BLACK);
+
+    bus->sendCommand(0x35); // TE ON
+    bus->sendData(0x00);    // TE mode: VSYNC signal
+
+    gfx->fillScreen(WHITE);
 }
 
 volatile bool disp_flush_enabled = true;
@@ -176,18 +208,14 @@ static void disp_flush(lv_display_t * disp_drv, const lv_area_t * area, uint8_t 
 
 static void lvgl_task(void *arg)
 {
-    static uint32_t last_time = 0;
-
     ESP_LOGI(TAG, "Starting LVGL task");
 
     while (1) {
-        EventBits_t bits = xEventGroupWaitBits(lvgl_disp_evt_group, LVGL_FLUSH_READY_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(16));
+        EventBits_t bits = xEventGroupWaitBits(lvgl_disp_evt_group, LVGL_FLUSH_READY_BIT | LVGL_TE_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-        uint32_t now = esp_timer_get_time();
-        if ((bits & LVGL_FLUSH_READY_BIT) && (now - last_time > 16667)) { // Update every 16.67ms
+        if ((bits & LVGL_FLUSH_READY_BIT) && (bits & LVGL_TE_BIT)) {
             gfx->flush();
-            xEventGroupClearBits(lvgl_disp_evt_group, LVGL_FLUSH_READY_BIT);
-            last_time = now;
+            xEventGroupClearBits(lvgl_disp_evt_group, LVGL_FLUSH_READY_BIT | LVGL_TE_BIT);
         }
     }
 }

@@ -1,5 +1,5 @@
 // Display
-#define TFT_rot   1
+#define TFT_rot   0
 #define TFT_res_W 320
 #define TFT_res_H 480
 

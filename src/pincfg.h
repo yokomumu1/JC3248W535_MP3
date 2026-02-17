@@ -6,6 +6,7 @@
 #define TFT_SDA1 48
 #define TFT_SDA2 40
 #define TFT_SDA3 39
+#define TFT_TE   38
 
 // Touch module
 #define Touch_SDA  4
